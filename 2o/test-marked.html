@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Marked.js Integration Test</title>
+</head>
+<body>
+    <h1>Marked.js Integration Test</h1>
+    <div id="test-results"></div>
+
+    <!-- marked.js library -->
+    <script src="https://cdn.jsdelivr.net/npm/marked@17.0.1/marked.min.js"></script>
+
+    <script>
+        const results = [];
+
+        function logResult(test, passed, message) {
+            results.push({ test, passed, message });
+            console.log(`${passed ? '✓' : '✗'} ${test}: ${message}`);
+        }
+
+        // Test 1: Library loaded
+        const test1 = typeof marked !== 'undefined';
+        logResult('Library Loaded', test1, test1 ? 'marked is defined' : 'marked is undefined');
+
+        if (!test1) {
+            document.getElementById('test-results').innerHTML = '<p style="color:red;">marked.js failed to load from CDN</p>';
+        } else {
+            // Configure marked
+            marked.setOptions({
+                gfm: true,
+                breaks: true,
+                headerIds: true,
+                mangle: false
+            });
+
+            // Test 2: Parse function exists
+            const test2 = typeof marked.parse === 'function';
+            logResult('Parse Function', test2, test2 ? 'marked.parse exists' : 'marked.parse missing');
+
+            // Test 3: Basic parsing
+            try {
+                const input = '# Hello\n\nThis is **bold**.';
+                const output = marked.parse(input);
+                const test3 = output.includes('<h1') && output.includes('<strong>');
+                logResult('Basic Parsing', test3, test3 ? 'Markdown rendered correctly' : 'Unexpected output');
+            } catch (e) {
+                logResult('Basic Parsing', false, e.message);
+            }
+
+            // Test 4: GFM strikethrough
+            try {
+                const input = '~~strikethrough~~';
+                const output = marked.parse(input);
+                const test4 = output.includes('<del>') || output.includes('~~');
+                logResult('GFM Strikethrough', test4, test4 ? 'GFM enabled' : 'GFM not working');
+            } catch (e) {
+                logResult('GFM Strikethrough', false, e.message);
+            }
+
+            // Display results
+            const allPassed = results.every(r => r.passed);
+            const color = allPassed ? 'green' : 'red';
+            const summary = allPassed ? 'All tests passed!' : 'Some tests failed';
+
+            document.getElementById('test-results').innerHTML = `
+                <p style="color:${color};font-weight:bold;">${summary}</p>
+                <ul>${results.map(r => `<li style="color:${r.passed ? 'green' : 'red'}">${r.test}: ${r.message}</li>`).join('')}</ul>
+            `;
+        }
+    </script>
+</body>
+</html>

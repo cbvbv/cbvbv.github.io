@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>File Loader Tests</title>
+    <style>
+        body { font-family: monospace; padding: 20px; }
+        .pass { color: green; }
+        .fail { color: red; }
+        .test-result { margin: 5px 0; }
+    </style>
+</head>
+<body>
+    <h1>File Loader Integration Tests</h1>
+    <div id="results"></div>
+
+    <script>
+        const CONFIG = {
+            workspaceDir: 'carrinhos',
+            startFile: 'index.md'
+        };
+
+        function validateConfiguration() {
+            const errors = [];
+            if (!CONFIG.workspaceDir || typeof CONFIG.workspaceDir !== 'string' || CONFIG.workspaceDir.trim() === '') {
+                errors.push('workspaceDir invalid');
+            }
+            if (!CONFIG.startFile || typeof CONFIG.startFile !== 'string' || CONFIG.startFile.trim() === '') {
+                errors.push('startFile invalid');
+            }
+            return { isValid: errors.length === 0, errors };
+        }
+
+        async function loadFile(filename) {
+            try {
+                const configValidation = validateConfiguration();
+                if (!configValidation.isValid) {
+                    return {
+                        success: false,
+                        error: { type: 'invalid_config', message: 'Configuration is invalid', filename }
+                    };
+                }
+
+                const extensions = ['', '.md', '.markdown'];
+                let lastError = null;
+
+                for (const ext of extensions) {
+                    const testFilename = filename.endsWith('.md') || filename.endsWith('.markdown')
+                        ? filename
+                        : filename + ext;
+                    const filePath = `${CONFIG.workspaceDir}/${testFilename}`;
+
+                    try {
+                        const response = await fetch(filePath);
+                        if (response.ok) {
+                            const content = await response.text();
+                            return { success: true, data: content };
+                        }
+
+                        if (response.status === 404) {
+                            lastError = { type: 'not_found', message: `File not found: ${testFilename}`, filename: testFilename };
+                        } else if (response.status === 403) {
+                            lastError = { type: 'access_denied', message: `Access denied: ${testFilename}`, filename: testFilename };
+                        } else {
+                            lastError = { type: 'network_error', message: `HTTP ${response.status}`, filename: testFilename };
+                        }
+                    } catch (fetchError) {
+                        lastError = { type: 'network_error', message: fetchError.message, filename: testFilename };
+                    }
+                }
+
+                return { success: false, error: lastError || { type: 'not_found', message: 'File not found', filename } };
+            } catch (error) {
+                return { success: false, error: { type: 'network_error', message: error.message, filename } };
+            }
+        }
+
+        async function fileExists(filename) {
+            const result = await loadFile(filename);
+            return result.success;
+        }
+
+        const results = [];
+
+        function logTest(name, passed, message) {
+            results.push({ name, passed, message });
+            console.log(`${passed ? '✓' : '✗'} ${name}: ${message}`);
+        }
+
+        async function runTests() {
+            // Test 1: Load existing file
+            const test1 = await loadFile('test-file.md');
+            logTest('Load existing file', test1.success && test1.data.includes('Test File'),
+                test1.success ? 'Loaded successfully' : test1.error.message);
+
+            // Test 2: Load file without extension
+            const test2 = await loadFile('test-file');
+            logTest('Load without extension', test2.success,
+                test2.success ? 'Auto-added .md extension' : test2.error.message);
+
+            // Test 3: Non-existent file
+            const test3 = await loadFile('nonexistent-12345.md');
+            logTest('Non-existent file', !test3.success && test3.error.type === 'not_found',
+                !test3.success ? 'Correctly returned not_found error' : 'Should have failed');
+
+            // Test 4: Result structure
+            logTest('Result structure', test1.hasOwnProperty('success') &&
+                (test1.success ? test1.hasOwnProperty('data') : test1.hasOwnProperty('error')),
+                'Correct structure');
+
+            // Test 5: Error object structure
+            logTest('Error object', test3.error && test3.error.type && test3.error.message && test3.error.filename,
+                'Has type, message, filename');
+
+            // Test 6: fileExists function
+            const exists = await fileExists('test-file.md');
+            const notExists = await fileExists('nonexistent-12345.md');
+            logTest('fileExists function', exists && !notExists,
+                exists ? 'Correctly identifies existing/non-existing files' : 'Failed');
+
+            // Display results
+            const resultsDiv = document.getElementById('results');
+            const allPassed = results.every(r => r.passed);
+            resultsDiv.innerHTML = `
+                <h2 style="color: ${allPassed ? 'green' : 'red'}">
+                    ${allPassed ? 'All tests passed!' : 'Some tests failed'}
+                </h2>
+                ${results.map(r => `
+                    <div class="test-result ${r.passed ? 'pass' : 'fail'}">
+                        ${r.passed ? '✓' : '✗'} ${r.name}: ${r.message}
+                    </div>
+                `).join('')}
+            `;
+        }
+
+        runTests();
+    </script>
+</body>
+</html>

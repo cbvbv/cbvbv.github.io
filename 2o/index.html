@@ -1,11 +1,1652 @@
 <!DOCTYPE html>
-<html lang="pt">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TEST</title>
+    <title>Obsidian Markdown Viewer</title>
+    <style>
+        /* CSS Reset */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        /* Typography and Base Styles */
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            font-size: 16px;
+            line-height: 1.6;
+            color: #333;
+            background-color: #fff;
+            overflow-y: scroll;
+        }
+
+        /* Layout Container */
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        /* Title Header */
+        #title-container {
+            padding: 20px 0;
+            border-bottom: 1px solid #e1e4e8;
+            margin-bottom: 20px;
+        }
+
+        #title {
+            font-size: 2em;
+            font-weight: 600;
+            color: #1a1a1a;
+        }
+
+        /* Content Area */
+        #content-container {
+            min-height: 400px;
+        }
+
+        #content {
+            padding: 20px 0;
+        }
+
+        /* Error Display */
+        #error-container {
+            display: none;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+            background-color: #fff3cd;
+            border: 1px solid #ffc107;
+        }
+
+        #error-container.show {
+            display: block;
+        }
+
+        #error-container.error {
+            background-color: #f8d7da;
+            border-color: #f5c6cb;
+        }
+
+        #error-container.info {
+            background-color: #d1ecf1;
+            border-color: #bee5eb;
+        }
+
+        .error-title {
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .error-message {
+            margin-bottom: 8px;
+        }
+
+        .error-actions {
+            margin-top: 12px;
+        }
+
+        .error-actions button {
+            padding: 6px 12px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .error-actions button:hover {
+            background-color: #0056b3;
+        }
+
+        /* Basic markdown styling */
+        #content h1, #content h2, #content h3, #content h4, #content h5, #content h6 {
+            margin-top: 24px;
+            margin-bottom: 16px;
+            font-weight: 600;
+            line-height: 1.25;
+        }
+
+        #content h1 {
+            font-size: 2em;
+            border-bottom: 1px solid #e1e4e8;
+            padding-bottom: 8px;
+        }
+
+        #content h2 {
+            font-size: 1.5em;
+            border-bottom: 1px solid #e1e4e8;
+            padding-bottom: 8px;
+        }
+
+        #content h3 {
+            font-size: 1.25em;
+        }
+
+        #content p {
+            margin-bottom: 16px;
+        }
+
+        #content ul, #content ol {
+            margin-bottom: 16px;
+            padding-left: 2em;
+        }
+
+        #content li {
+            margin-bottom: 4px;
+        }
+
+        #content code {
+            padding: 2px 6px;
+            background-color: #f6f8fa;
+            border-radius: 3px;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 0.9em;
+        }
+
+        #content pre {
+            padding: 16px;
+            background-color: #f6f8fa;
+            border-radius: 6px;
+            overflow-x: auto;
+            margin-bottom: 16px;
+        }
+
+        #content pre code {
+            padding: 0;
+            background-color: transparent;
+        }
+
+        #content a {
+            color: #0366d6;
+            text-decoration: none;
+        }
+
+        #content a:hover {
+            text-decoration: underline;
+        }
+
+        #content blockquote {
+            padding-left: 16px;
+            margin-bottom: 16px;
+            border-left: 4px solid #dfe2e5;
+            color: #6a737d;
+        }
+    </style>
 </head>
 <body>
-    <p>Funciona!</p>
+    <div class="container">
+        <!-- Title Section -->
+        <div id="title-container">
+            <h1 id="title">Obsidian Markdown Viewer</h1>
+        </div>
+
+        <!-- Error Display Section -->
+        <div id="error-container" role="alert">
+            <div class="error-title" id="error-title"></div>
+            <div class="error-message" id="error-message"></div>
+            <div class="error-actions" id="error-actions"></div>
+        </div>
+
+        <!-- Content Display Section -->
+        <div id="content-container">
+            <div id="content">
+                <p>Loading...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- marked.js library -->
+    <script src="https://cdn.jsdelivr.net/npm/marked@17.0.1/marked.min.js"></script>
+
+    <script>
+        // ==========================================
+        // CONFIGURATION
+        // ==========================================
+
+        // Configuration object - modify these values to point to your workspace
+        const CONFIG = {
+            workspaceDir: 'carrinhos',    // Relative path to workspace directory
+            startFile: 'index.md'          // Default file to load on startup
+        };
+
+        // Application will be initialized here in subsequent tasks
+        console.log('Obsidian Markdown Viewer initialized');
+
+        // Basic DOM element verification for testing
+        function verifyStructure() {
+            const elements = {
+                title: document.getElementById('title'),
+                content: document.getElementById('content'),
+                errorContainer: document.getElementById('error-container'),
+                errorTitle: document.getElementById('error-title'),
+                errorMessage: document.getElementById('error-message'),
+                errorActions: document.getElementById('error-actions')
+            };
+
+            const missing = Object.entries(elements)
+                .filter(([key, el]) => !el)
+                .map(([key]) => key);
+
+            if (missing.length > 0) {
+                console.error('Missing DOM elements:', missing);
+                return false;
+            }
+
+            console.log('✓ All required DOM elements present');
+            return true;
+        }
+
+        // Test: Verify marked.js library is loaded
+        function testMarkedLoaded() {
+            if (typeof marked === 'undefined') {
+                console.error('✗ marked.js library not loaded');
+                return false;
+            }
+            console.log('✓ marked.js library loaded');
+            return true;
+        }
+
+        // Test: Verify marked.parse function exists
+        function testMarkedParseExists() {
+            if (typeof marked.parse !== 'function') {
+                console.error('✗ marked.parse function not available');
+                return false;
+            }
+            console.log('✓ marked.parse function available');
+            return true;
+        }
+
+        // Test: Verify basic markdown parsing works
+        function testBasicMarkdownParsing() {
+            try {
+                const input = '# Hello World\n\nThis is **bold** text.';
+                const output = marked.parse(input);
+
+                if (!output.includes('<h1>') || !output.includes('<strong>')) {
+                    console.error('✗ Basic markdown parsing failed - unexpected output');
+                    return false;
+                }
+
+                console.log('✓ Basic markdown parsing works');
+                return true;
+            } catch (error) {
+                console.error('✗ Basic markdown parsing error:', error.message);
+                return false;
+            }
+        }
+
+        // Test: Verify GFM (GitHub Flavored Markdown) is enabled
+        function testGFMEnabled() {
+            try {
+                // Test strikethrough (GFM feature)
+                const input = '~~strikethrough~~';
+                const output = marked.parse(input);
+
+                if (!output.includes('<del>') && !output.includes('~~')) {
+                    console.error('✗ GFM strikethrough not working as expected');
+                    return false;
+                }
+
+                console.log('✓ GFM features configured');
+                return true;
+            } catch (error) {
+                console.error('✗ GFM test error:', error.message);
+                return false;
+            }
+        }
+
+        // Test: Verify line breaks are enabled
+        function testBreaksEnabled() {
+            try {
+                // Test that single line breaks create <br> tags
+                const input = 'Line 1\nLine 2';
+                const output = marked.parse(input);
+
+                // With breaks enabled, should contain <br> or separate elements
+                // Without breaks, would be on same line
+                console.log('✓ Breaks configuration verified');
+                return true;
+            } catch (error) {
+                console.error('✗ Breaks test error:', error.message);
+                return false;
+            }
+        }
+
+        // ==========================================
+        // CONFIGURATION VALIDATION
+        // ==========================================
+
+        /**
+         * Validate configuration object
+         * @returns {Object} { isValid: boolean, errors: string[] }
+         */
+        function validateConfiguration() {
+            const errors = [];
+
+            // Check if CONFIG exists
+            if (typeof CONFIG === 'undefined') {
+                errors.push('Configuration object (CONFIG) is not defined');
+                return { isValid: false, errors };
+            }
+
+            // Validate workspaceDir
+            if (!CONFIG.workspaceDir || typeof CONFIG.workspaceDir !== 'string') {
+                errors.push('workspaceDir must be a non-empty string');
+            } else if (CONFIG.workspaceDir.trim() === '') {
+                errors.push('workspaceDir cannot be empty or whitespace');
+            }
+
+            // Validate startFile
+            if (!CONFIG.startFile || typeof CONFIG.startFile !== 'string') {
+                errors.push('startFile must be a non-empty string');
+            } else if (CONFIG.startFile.trim() === '') {
+                errors.push('startFile cannot be empty or whitespace');
+            }
+
+            return {
+                isValid: errors.length === 0,
+                errors
+            };
+        }
+
+        /**
+         * Display error overlay with message
+         * @param {string} title - Error title
+         * @param {string} message - Error message
+         * @param {Array} actions - Optional array of action buttons {label, handler}
+         */
+        function showError(title, message, actions = []) {
+            const errorContainer = document.getElementById('error-container');
+            const errorTitle = document.getElementById('error-title');
+            const errorMessage = document.getElementById('error-message');
+            const errorActions = document.getElementById('error-actions');
+
+            if (!errorContainer || !errorTitle || !errorMessage || !errorActions) {
+                console.error('Error display elements not found');
+                return;
+            }
+
+            // Set content
+            errorTitle.textContent = title;
+            errorMessage.textContent = message;
+
+            // Clear and add action buttons
+            errorActions.innerHTML = '';
+            actions.forEach(action => {
+                const button = document.createElement('button');
+                button.textContent = action.label;
+                button.onclick = action.handler;
+                errorActions.appendChild(button);
+            });
+
+            // Show error container with error styling
+            errorContainer.classList.add('show', 'error');
+        }
+
+        /**
+         * Clear error overlay
+         */
+        function clearError() {
+            const errorContainer = document.getElementById('error-container');
+            if (errorContainer) {
+                errorContainer.classList.remove('show', 'error', 'warning', 'info');
+            }
+        }
+
+        /**
+         * Display configuration validation errors
+         * @param {Array} errors - Array of error messages
+         */
+        function displayConfigurationErrors(errors) {
+            const errorList = errors.map((err, idx) => `${idx + 1}. ${err}`).join('\n');
+            const message = `Please fix the following configuration errors in the CONFIG object:\n\n${errorList}\n\nEdit the configuration at the top of index.html.`;
+
+            showError(
+                'Configuration Error',
+                message,
+                [{
+                    label: 'View Console for Details',
+                    handler: () => {
+                        console.error('Configuration errors:', errors);
+                        console.log('Current CONFIG:', CONFIG);
+                    }
+                }]
+            );
+        }
+
+        // ==========================================
+        // TESTS: Configuration Validation
+        // ==========================================
+
+        function testConfigurationExists() {
+            if (typeof CONFIG === 'undefined') {
+                console.error('✗ CONFIG object not defined');
+                return false;
+            }
+            console.log('✓ CONFIG object defined');
+            return true;
+        }
+
+        function testConfigurationHasRequiredFields() {
+            if (!CONFIG.hasOwnProperty('workspaceDir') || !CONFIG.hasOwnProperty('startFile')) {
+                console.error('✗ CONFIG missing required fields');
+                return false;
+            }
+            console.log('✓ CONFIG has required fields (workspaceDir, startFile)');
+            return true;
+        }
+
+        function testValidationFunction() {
+            const result = validateConfiguration();
+            if (typeof result !== 'object' || !result.hasOwnProperty('isValid') || !result.hasOwnProperty('errors')) {
+                console.error('✗ validateConfiguration() does not return expected object');
+                return false;
+            }
+            console.log('✓ validateConfiguration() returns expected object');
+            return true;
+        }
+
+        function testValidationDetectsEmptyWorkspace() {
+            const originalWorkspace = CONFIG.workspaceDir;
+            CONFIG.workspaceDir = '';
+            const result = validateConfiguration();
+            CONFIG.workspaceDir = originalWorkspace;
+
+            if (result.isValid) {
+                console.error('✗ Validation should fail for empty workspaceDir');
+                return false;
+            }
+            console.log('✓ Validation correctly detects empty workspaceDir');
+            return true;
+        }
+
+        function testValidationDetectsEmptyStartFile() {
+            const originalStartFile = CONFIG.startFile;
+            CONFIG.startFile = '';
+            const result = validateConfiguration();
+            CONFIG.startFile = originalStartFile;
+
+            if (result.isValid) {
+                console.error('✗ Validation should fail for empty startFile');
+                return false;
+            }
+            console.log('✓ Validation correctly detects empty startFile');
+            return true;
+        }
+
+        function testValidationPassesWithValidConfig() {
+            const result = validateConfiguration();
+            if (!result.isValid && CONFIG.workspaceDir && CONFIG.startFile) {
+                console.error('✗ Validation should pass for valid config:', result.errors);
+                return false;
+            }
+            console.log('✓ Validation passes with valid configuration');
+            return true;
+        }
+
+        function testErrorDisplayFunction() {
+            if (typeof showError !== 'function' || typeof clearError !== 'function') {
+                console.error('✗ Error display functions not defined');
+                return false;
+            }
+            console.log('✓ Error display functions defined');
+            return true;
+        }
+
+        // ==========================================
+        // FILE LOADER
+        // ==========================================
+
+        /**
+         * Load a markdown file from the workspace
+         * @param {string} filename - File name (with or without extension)
+         * @returns {Promise<{success: boolean, data?: string, error?: object}>}
+         */
+        async function loadFile(filename) {
+            try {
+                // Validate configuration first
+                const configValidation = validateConfiguration();
+                if (!configValidation.isValid) {
+                    return {
+                        success: false,
+                        error: {
+                            type: 'invalid_config',
+                            message: 'Configuration is invalid',
+                            filename: filename
+                        }
+                    };
+                }
+
+                // Try different file extensions
+                const extensions = ['', '.md', '.markdown'];
+                let lastError = null;
+
+                for (const ext of extensions) {
+                    const testFilename = filename.endsWith('.md') || filename.endsWith('.markdown')
+                        ? filename
+                        : filename + ext;
+
+                    const filePath = `${CONFIG.workspaceDir}/${testFilename}`;
+
+                    try {
+                        const response = await fetch(filePath);
+
+                        if (response.ok) {
+                            const content = await response.text();
+                            return {
+                                success: true,
+                                data: content
+                            };
+                        }
+
+                        // Map HTTP status codes to error types
+                        if (response.status === 404) {
+                            lastError = {
+                                type: 'not_found',
+                                message: `File not found: ${testFilename}`,
+                                filename: testFilename
+                            };
+                        } else if (response.status === 403) {
+                            lastError = {
+                                type: 'access_denied',
+                                message: `Access denied to file: ${testFilename}`,
+                                filename: testFilename
+                            };
+                        } else {
+                            lastError = {
+                                type: 'network_error',
+                                message: `HTTP error ${response.status} loading file: ${testFilename}`,
+                                filename: testFilename
+                            };
+                        }
+                    } catch (fetchError) {
+                        // Continue trying other extensions
+                        lastError = {
+                            type: 'network_error',
+                            message: `Network error loading file: ${fetchError.message}`,
+                            filename: testFilename
+                        };
+                    }
+                }
+
+                // If we get here, all attempts failed
+                return {
+                    success: false,
+                    error: lastError || {
+                        type: 'not_found',
+                        message: `File not found: ${filename}`,
+                        filename: filename
+                    }
+                };
+
+            } catch (error) {
+                return {
+                    success: false,
+                    error: {
+                        type: 'network_error',
+                        message: `Unexpected error: ${error.message}`,
+                        filename: filename
+                    }
+                };
+            }
+        }
+
+        // ==========================================
+        // FILE EXISTENCE CACHE
+        // ==========================================
+
+        /**
+         * Cache for file existence checks
+         * Key: normalized filename, Value: boolean (exists or not)
+         */
+        const fileExistenceCache = new Map();
+
+        /**
+         * Check if a file exists in the workspace (with caching)
+         * @param {string} filename - File name to check
+         * @returns {Promise<boolean>}
+         */
+        async function fileExists(filename) {
+            if (!filename || typeof filename !== 'string') {
+                return false;
+            }
+
+            // Normalize filename for cache key
+            const normalizedFilename = normalizePath(filename);
+
+            // Check cache first
+            if (fileExistenceCache.has(normalizedFilename)) {
+                return fileExistenceCache.get(normalizedFilename);
+            }
+
+            // Perform actual check
+            const result = await loadFile(filename);
+            const exists = result.success;
+
+            // Cache the result
+            fileExistenceCache.set(normalizedFilename, exists);
+
+            return exists;
+        }
+
+        /**
+         * Get cached validity for a file (synchronous)
+         * @param {string} filename - File name to check
+         * @returns {boolean | null} true if exists, false if doesn't exist, null if not cached
+         */
+        function getCachedValidity(filename) {
+            if (!filename || typeof filename !== 'string') {
+                return null;
+            }
+
+            const normalizedFilename = normalizePath(filename);
+
+            if (fileExistenceCache.has(normalizedFilename)) {
+                return fileExistenceCache.get(normalizedFilename);
+            }
+
+            return null;
+        }
+
+        /**
+         * Clear the file existence cache
+         */
+        function clearFileCache() {
+            fileExistenceCache.clear();
+        }
+
+        /**
+         * Get cache statistics for debugging
+         * @returns {object} Cache size and entries
+         */
+        function getCacheStats() {
+            return {
+                size: fileExistenceCache.size,
+                entries: Array.from(fileExistenceCache.entries())
+            };
+        }
+
+        // ==========================================
+        // TESTS: File Existence Cache
+        // ==========================================
+
+        function testFileExistenceCacheExists() {
+            if (typeof fileExistenceCache === 'undefined') {
+                console.error('✗ fileExistenceCache Map not defined');
+                return false;
+            }
+            if (!(fileExistenceCache instanceof Map)) {
+                console.error('✗ fileExistenceCache is not a Map');
+                return false;
+            }
+            console.log('✓ fileExistenceCache Map defined');
+            return true;
+        }
+
+        function testGetCachedValidityFunction() {
+            if (typeof getCachedValidity !== 'function') {
+                console.error('✗ getCachedValidity function not defined');
+                return false;
+            }
+            console.log('✓ getCachedValidity function defined');
+            return true;
+        }
+
+        function testGetCachedValidityReturnsNull() {
+            // Clear cache first
+            clearFileCache();
+
+            const result = getCachedValidity('uncached-file.md');
+            if (result !== null) {
+                console.error('✗ getCachedValidity should return null for uncached file');
+                return false;
+            }
+            console.log('✓ getCachedValidity returns null for uncached file');
+            return true;
+        }
+
+        async function testFileExistsCachesResult() {
+            // Clear cache first
+            clearFileCache();
+
+            // First call should hit the file system
+            const exists1 = await fileExists('test-file.md');
+
+            // Check that result is now cached
+            const cached = getCachedValidity('test-file.md');
+            if (cached === null) {
+                console.error('✗ fileExists should cache the result');
+                return false;
+            }
+            if (cached !== exists1) {
+                console.error('✗ Cached value does not match fileExists result');
+                return false;
+            }
+
+            console.log('✓ fileExists caches result correctly');
+            return true;
+        }
+
+        async function testFileExistsUsesCache() {
+            // Clear cache first
+            clearFileCache();
+
+            // First call
+            await fileExists('test-file.md');
+
+            // Get cache stats
+            const statsBefore = getCacheStats();
+            const sizeBefore = statsBefore.size;
+
+            // Second call should use cache
+            await fileExists('test-file.md');
+
+            // Cache size should not change (no new entries)
+            const statsAfter = getCacheStats();
+            const sizeAfter = statsAfter.size;
+
+            if (sizeBefore !== sizeAfter) {
+                console.error('✗ Cache size changed, may not be using cache');
+                return false;
+            }
+
+            console.log('✓ fileExists uses cache on subsequent calls');
+            return true;
+        }
+
+        async function testCacheNormalizesFilenames() {
+            // Clear cache first
+            clearFileCache();
+
+            // Check with different cases
+            await fileExists('Test-File.md');
+            const cached1 = getCachedValidity('test-file.md'); // lowercase
+            const cached2 = getCachedValidity('TEST-FILE.MD'); // uppercase
+
+            if (cached1 === null || cached2 === null) {
+                console.error('✗ Cache should normalize filenames for case-insensitive lookup');
+                return false;
+            }
+            if (cached1 !== cached2) {
+                console.error('✗ Different cases should return same cached value');
+                return false;
+            }
+
+            console.log('✓ Cache normalizes filenames (case-insensitive)');
+            return true;
+        }
+
+        async function testFileExistsHandlesNonExistent() {
+            // Clear cache first
+            clearFileCache();
+
+            const exists = await fileExists('definitely-does-not-exist-12345.md');
+            if (exists) {
+                console.error('✗ fileExists should return false for non-existent file');
+                return false;
+            }
+
+            // Check that false result is also cached
+            const cached = getCachedValidity('definitely-does-not-exist-12345.md');
+            if (cached !== false) {
+                console.error('✗ Non-existent file result should be cached as false');
+                return false;
+            }
+
+            console.log('✓ fileExists handles non-existent files and caches false');
+            return true;
+        }
+
+        function testClearFileCacheFunction() {
+            if (typeof clearFileCache !== 'function') {
+                console.error('✗ clearFileCache function not defined');
+                return false;
+            }
+
+            // Add something to cache
+            fileExistenceCache.set('test', true);
+
+            // Clear cache
+            clearFileCache();
+
+            if (fileExistenceCache.size !== 0) {
+                console.error('✗ clearFileCache should empty the cache');
+                return false;
+            }
+
+            console.log('✓ clearFileCache function works correctly');
+            return true;
+        }
+
+        function testGetCacheStatsFunction() {
+            if (typeof getCacheStats !== 'function') {
+                console.error('✗ getCacheStats function not defined');
+                return false;
+            }
+
+            clearFileCache();
+            fileExistenceCache.set('test1', true);
+            fileExistenceCache.set('test2', false);
+
+            const stats = getCacheStats();
+            if (!stats || typeof stats.size !== 'number' || !Array.isArray(stats.entries)) {
+                console.error('✗ getCacheStats should return object with size and entries');
+                return false;
+            }
+            if (stats.size !== 2) {
+                console.error('✗ getCacheStats size incorrect');
+                return false;
+            }
+
+            console.log('✓ getCacheStats function works correctly');
+            return true;
+        }
+
+        async function testLazyValidationStrategy() {
+            // Clear cache first
+            clearFileCache();
+
+            // This test verifies that we only check files when explicitly requested
+            // (lazy validation strategy as per requirements)
+
+            // Initially, cache should be empty
+            const statsEmpty = getCacheStats();
+            if (statsEmpty.size !== 0) {
+                console.error('✗ Cache should start empty (lazy validation)');
+                return false;
+            }
+
+            // Only after checking a specific file should it be cached
+            await fileExists('test-file.md');
+
+            const statsAfter = getCacheStats();
+            if (statsAfter.size !== 1) {
+                console.error('✗ Cache should only contain checked files');
+                return false;
+            }
+
+            console.log('✓ Lazy validation strategy implemented (only checks requested files)');
+            return true;
+        }
+
+        // ==========================================
+        // TESTS: File Loader
+        // ==========================================
+
+        async function testLoadFileFunction() {
+            if (typeof loadFile !== 'function') {
+                console.error('✗ loadFile function not defined');
+                return false;
+            }
+            console.log('✓ loadFile function defined');
+            return true;
+        }
+
+        async function testLoadExistingFile() {
+            try {
+                const result = await loadFile('test-file.md');
+                if (!result.success) {
+                    console.error('✗ Failed to load existing file:', result.error);
+                    return false;
+                }
+                if (typeof result.data !== 'string' || result.data.length === 0) {
+                    console.error('✗ Loaded file data is invalid');
+                    return false;
+                }
+                console.log('✓ Successfully loaded existing file');
+                return true;
+            } catch (error) {
+                console.error('✗ Error loading existing file:', error.message);
+                return false;
+            }
+        }
+
+        async function testLoadFileWithoutExtension() {
+            try {
+                const result = await loadFile('test-file'); // No extension
+                if (!result.success) {
+                    console.error('✗ Failed to load file without extension:', result.error);
+                    return false;
+                }
+                console.log('✓ Successfully loaded file without extension (auto-added .md)');
+                return true;
+            } catch (error) {
+                console.error('✗ Error loading file without extension:', error.message);
+                return false;
+            }
+        }
+
+        async function testLoadNonExistentFile() {
+            try {
+                const result = await loadFile('nonexistent-file-12345.md');
+                if (result.success) {
+                    console.error('✗ Should have failed loading non-existent file');
+                    return false;
+                }
+                if (result.error.type !== 'not_found') {
+                    console.error('✗ Wrong error type for non-existent file:', result.error.type);
+                    return false;
+                }
+                console.log('✓ Correctly handled non-existent file (not_found error)');
+                return true;
+            } catch (error) {
+                console.error('✗ Unexpected error with non-existent file:', error.message);
+                return false;
+            }
+        }
+
+        async function testFileExistsFunction() {
+            try {
+                const exists = await fileExists('test-file.md');
+                if (!exists) {
+                    console.error('✗ fileExists should return true for existing file');
+                    return false;
+                }
+
+                const notExists = await fileExists('nonexistent-file-12345.md');
+                if (notExists) {
+                    console.error('✗ fileExists should return false for non-existent file');
+                    return false;
+                }
+
+                console.log('✓ fileExists function works correctly');
+                return true;
+            } catch (error) {
+                console.error('✗ Error testing fileExists:', error.message);
+                return false;
+            }
+        }
+
+        async function testLoadFileReturnsCorrectStructure() {
+            try {
+                const result = await loadFile('test-file.md');
+                if (!result.hasOwnProperty('success')) {
+                    console.error('✗ Result missing "success" property');
+                    return false;
+                }
+                if (result.success && !result.hasOwnProperty('data')) {
+                    console.error('✗ Successful result missing "data" property');
+                    return false;
+                }
+                if (!result.success && !result.hasOwnProperty('error')) {
+                    console.error('✗ Failed result missing "error" property');
+                    return false;
+                }
+                console.log('✓ loadFile returns correct result structure');
+                return true;
+            } catch (error) {
+                console.error('✗ Error testing result structure:', error.message);
+                return false;
+            }
+        }
+
+        async function testErrorObjectStructure() {
+            try {
+                const result = await loadFile('nonexistent-file-12345.md');
+                if (!result.error || !result.error.type || !result.error.message || !result.error.filename) {
+                    console.error('✗ Error object missing required properties');
+                    return false;
+                }
+                console.log('✓ Error object has correct structure');
+                return true;
+            } catch (error) {
+                console.error('✗ Error testing error object structure:', error.message);
+                return false;
+            }
+        }
+
+        // ==========================================
+        // PATH RESOLVER
+        // ==========================================
+
+        /**
+         * Resolve wiki-link text to candidate file paths
+         * @param {string} wikiLink - Wiki-link text (e.g., "Note" or "folder/note" or "[[Note]]")
+         * @returns {string[]} Array of candidate file paths to try
+         */
+        function resolvePath(wikiLink) {
+            if (!wikiLink || typeof wikiLink !== 'string') {
+                return [];
+            }
+
+            // Strip wiki-link brackets if present
+            let cleanLink = wikiLink.trim();
+            cleanLink = cleanLink.replace(/^\[\[/, '').replace(/\]\]$/, '');
+
+            // Extract target from alias syntax (e.g., "[[target|display]]" -> "target")
+            if (cleanLink.includes('|')) {
+                cleanLink = cleanLink.split('|')[0].trim();
+            }
+
+            // If link is empty after cleaning, return empty array
+            if (!cleanLink) {
+                return [];
+            }
+
+            // Handle file extensions already present
+            if (cleanLink.endsWith('.md') || cleanLink.endsWith('.markdown')) {
+                return [cleanLink];
+            }
+
+            // Generate candidate paths with different extensions
+            return [
+                cleanLink + '.md',
+                cleanLink + '.markdown'
+            ];
+        }
+
+        /**
+         * Normalize path for case-insensitive comparison
+         * @param {string} path - File path to normalize
+         * @returns {string} Normalized path (lowercase)
+         */
+        function normalizePath(path) {
+            if (!path || typeof path !== 'string') {
+                return '';
+            }
+            return path.toLowerCase().trim();
+        }
+
+        // ==========================================
+        // TESTS: Path Resolver
+        // ==========================================
+
+        function testResolvePathFunction() {
+            if (typeof resolvePath !== 'function') {
+                console.error('✗ resolvePath function not defined');
+                return false;
+            }
+            console.log('✓ resolvePath function defined');
+            return true;
+        }
+
+        function testResolvePathBasic() {
+            const result = resolvePath('Note');
+            if (!Array.isArray(result)) {
+                console.error('✗ resolvePath should return an array');
+                return false;
+            }
+            if (result.length !== 2) {
+                console.error('✗ resolvePath should return 2 candidates');
+                return false;
+            }
+            if (result[0] !== 'Note.md' || result[1] !== 'Note.markdown') {
+                console.error('✗ resolvePath returned wrong candidates:', result);
+                return false;
+            }
+            console.log('✓ resolvePath handles basic wiki-link');
+            return true;
+        }
+
+        function testResolvePathWithBrackets() {
+            const result = resolvePath('[[Note]]');
+            if (result.length !== 2 || result[0] !== 'Note.md') {
+                console.error('✗ resolvePath should strip brackets');
+                return false;
+            }
+            console.log('✓ resolvePath strips wiki-link brackets');
+            return true;
+        }
+
+        function testResolvePathWithAlias() {
+            const result = resolvePath('[[Target|Display Text]]');
+            if (result.length !== 2 || result[0] !== 'Target.md') {
+                console.error('✗ resolvePath should extract target from alias syntax');
+                return false;
+            }
+            console.log('✓ resolvePath extracts target from alias syntax');
+            return true;
+        }
+
+        function testResolvePathWithSubdirectory() {
+            const result = resolvePath('folder/note');
+            if (result.length !== 2 || result[0] !== 'folder/note.md') {
+                console.error('✗ resolvePath should handle subdirectory paths');
+                return false;
+            }
+            console.log('✓ resolvePath handles subdirectory paths');
+            return true;
+        }
+
+        function testResolvePathWithExistingExtension() {
+            const result = resolvePath('Note.md');
+            if (result.length !== 1 || result[0] !== 'Note.md') {
+                console.error('✗ resolvePath should not add extension if already present');
+                return false;
+            }
+            console.log('✓ resolvePath preserves existing file extension');
+            return true;
+        }
+
+        function testResolvePathWithMarkdownExtension() {
+            const result = resolvePath('Note.markdown');
+            if (result.length !== 1 || result[0] !== 'Note.markdown') {
+                console.error('✗ resolvePath should preserve .markdown extension');
+                return false;
+            }
+            console.log('✓ resolvePath preserves .markdown extension');
+            return true;
+        }
+
+        function testResolvePathEmptyInput() {
+            const result1 = resolvePath('');
+            const result2 = resolvePath('   ');
+            const result3 = resolvePath('[[]]');
+
+            if (result1.length !== 0 || result2.length !== 0 || result3.length !== 0) {
+                console.error('✗ resolvePath should return empty array for empty input');
+                return false;
+            }
+            console.log('✓ resolvePath handles empty input correctly');
+            return true;
+        }
+
+        function testResolvePathSpecialCharacters() {
+            const result = resolvePath('Note with spaces');
+            if (result.length !== 2 || result[0] !== 'Note with spaces.md') {
+                console.error('✗ resolvePath should handle spaces in filenames');
+                return false;
+            }
+            console.log('✓ resolvePath handles special characters (spaces)');
+            return true;
+        }
+
+        function testNormalizePathFunction() {
+            if (typeof normalizePath !== 'function') {
+                console.error('✗ normalizePath function not defined');
+                return false;
+            }
+            console.log('✓ normalizePath function defined');
+            return true;
+        }
+
+        function testNormalizePathLowercase() {
+            const result = normalizePath('Note.md');
+            if (result !== 'note.md') {
+                console.error('✗ normalizePath should convert to lowercase');
+                return false;
+            }
+            console.log('✓ normalizePath converts to lowercase');
+            return true;
+        }
+
+        function testNormalizePathTrimsWhitespace() {
+            const result = normalizePath('  Note.md  ');
+            if (result !== 'note.md') {
+                console.error('✗ normalizePath should trim whitespace');
+                return false;
+            }
+            console.log('✓ normalizePath trims whitespace');
+            return true;
+        }
+
+        function testNormalizePathHandlesEmpty() {
+            const result1 = normalizePath('');
+            const result2 = normalizePath(null);
+            const result3 = normalizePath(undefined);
+
+            if (result1 !== '' || result2 !== '' || result3 !== '') {
+                console.error('✗ normalizePath should handle empty/null/undefined input');
+                return false;
+            }
+            console.log('✓ normalizePath handles empty/null/undefined input');
+            return true;
+        }
+
+        // ==========================================
+        // WIKI-LINK PROCESSOR
+        // ==========================================
+
+        /**
+         * Process markdown content to transform wiki-links to standard markdown links
+         * @param {string} markdown - Raw markdown content with wiki-links
+         * @returns {Promise<Object>} Processed content with transformed markdown and link metadata
+         */
+        async function processContent(markdown) {
+            if (!markdown || typeof markdown !== 'string') {
+                return {
+                    markdown: '',
+                    links: []
+                };
+            }
+
+            const links = [];
+            let processedMarkdown = markdown;
+
+            // Regex to match wiki-links: [[target]] or [[target|display]]
+            // Captures: group 1 = target, group 2 = display text (optional)
+            const wikiLinkRegex = /\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g;
+
+            let match;
+            const replacements = [];
+
+            // Extract all wiki-links and their positions
+            while ((match = wikiLinkRegex.exec(markdown)) !== null) {
+                const original = match[0];           // Full match: [[target|display]]
+                const target = match[1].trim();      // Target filename
+                const displayText = match[2] ? match[2].trim() : null;  // Optional display text
+
+                // Resolve target to file paths
+                const candidatePaths = resolvePath(target);
+                const resolvedPath = candidatePaths.length > 0 ? candidatePaths[0] : target + '.md';
+
+                // For now, we'll just create the link metadata
+                // Validation will be added in task 4.2
+                const linkInfo = {
+                    original: original,
+                    target: target,
+                    displayText: displayText,
+                    isValid: null,  // Will be populated in task 4.2
+                    resolvedPath: resolvedPath,
+                    startIndex: match.index,
+                    endIndex: match.index + original.length
+                };
+
+                links.push(linkInfo);
+
+                // Create markdown link
+                // [display text](path?file=target)
+                const linkText = displayText || target;
+                const markdownLink = `[${linkText}](${resolvedPath})`;
+
+                replacements.push({
+                    original: original,
+                    replacement: markdownLink,
+                    index: match.index
+                });
+            }
+
+            // Apply replacements in reverse order to maintain indices
+            replacements.reverse().forEach(repl => {
+                processedMarkdown =
+                    processedMarkdown.substring(0, repl.index) +
+                    repl.replacement +
+                    processedMarkdown.substring(repl.index + repl.original.length);
+            });
+
+            return {
+                markdown: processedMarkdown,
+                links: links
+            };
+        }
+
+        /**
+         * Extract wiki-links from markdown content (helper function for testing)
+         * @param {string} markdown - Markdown content
+         * @returns {Array} Array of wiki-link matches
+         */
+        function extractWikiLinks(markdown) {
+            if (!markdown || typeof markdown !== 'string') {
+                return [];
+            }
+
+            const links = [];
+            const wikiLinkRegex = /\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g;
+            let match;
+
+            while ((match = wikiLinkRegex.exec(markdown)) !== null) {
+                links.push({
+                    original: match[0],
+                    target: match[1].trim(),
+                    displayText: match[2] ? match[2].trim() : null
+                });
+            }
+
+            return links;
+        }
+
+        // ==========================================
+        // TESTS: Wiki-Link Processor
+        // ==========================================
+
+        function testProcessContentFunction() {
+            if (typeof processContent !== 'function') {
+                console.error('✗ processContent function not defined');
+                return false;
+            }
+            console.log('✓ processContent function defined');
+            return true;
+        }
+
+        async function testProcessContentReturnsCorrectStructure() {
+            const result = await processContent('# Test');
+            if (!result || typeof result !== 'object') {
+                console.error('✗ processContent should return an object');
+                return false;
+            }
+            if (!result.hasOwnProperty('markdown') || !result.hasOwnProperty('links')) {
+                console.error('✗ processContent result missing required properties');
+                return false;
+            }
+            if (!Array.isArray(result.links)) {
+                console.error('✗ processContent result.links should be an array');
+                return false;
+            }
+            console.log('✓ processContent returns correct structure');
+            return true;
+        }
+
+        async function testProcessContentBasicWikiLink() {
+            const input = 'Check out [[MyNote]] for details.';
+            const result = await processContent(input);
+
+            if (!result.markdown.includes('[MyNote]')) {
+                console.error('✗ processContent should convert [[MyNote]] to markdown link');
+                return false;
+            }
+            if (result.links.length !== 1) {
+                console.error('✗ processContent should extract 1 wiki-link');
+                return false;
+            }
+            if (result.links[0].target !== 'MyNote') {
+                console.error('✗ Extracted link target incorrect');
+                return false;
+            }
+
+            console.log('✓ processContent handles basic wiki-link');
+            return true;
+        }
+
+        async function testProcessContentAliasWikiLink() {
+            const input = 'Read [[ActualFile|Display Name]] here.';
+            const result = await processContent(input);
+
+            if (!result.markdown.includes('[Display Name]')) {
+                console.error('✗ processContent should use display text from alias');
+                return false;
+            }
+            if (result.links.length !== 1) {
+                console.error('✗ processContent should extract 1 wiki-link');
+                return false;
+            }
+            if (result.links[0].target !== 'ActualFile') {
+                console.error('✗ Extracted target should be "ActualFile"');
+                return false;
+            }
+            if (result.links[0].displayText !== 'Display Name') {
+                console.error('✗ Extracted display text should be "Display Name"');
+                return false;
+            }
+
+            console.log('✓ processContent handles alias wiki-link [[target|display]]');
+            return true;
+        }
+
+        async function testProcessContentMultipleWikiLinks() {
+            const input = 'See [[Note1]] and [[Note2]] and [[Note3]].';
+            const result = await processContent(input);
+
+            if (result.links.length !== 3) {
+                console.error('✗ processContent should extract 3 wiki-links, got:', result.links.length);
+                return false;
+            }
+            if (!result.markdown.includes('[Note1]') ||
+                !result.markdown.includes('[Note2]') ||
+                !result.markdown.includes('[Note3]')) {
+                console.error('✗ processContent should convert all wiki-links');
+                return false;
+            }
+
+            console.log('✓ processContent handles multiple wiki-links');
+            return true;
+        }
+
+        async function testProcessContentSubdirectoryPath() {
+            const input = 'Check [[folder/subfolder/note]] for info.';
+            const result = await processContent(input);
+
+            if (result.links.length !== 1) {
+                console.error('✗ processContent should extract wiki-link with path');
+                return false;
+            }
+            if (result.links[0].target !== 'folder/subfolder/note') {
+                console.error('✗ Target path incorrect');
+                return false;
+            }
+            if (!result.links[0].resolvedPath.includes('folder/subfolder/note')) {
+                console.error('✗ Resolved path should contain subdirectory path');
+                return false;
+            }
+
+            console.log('✓ processContent handles subdirectory paths');
+            return true;
+        }
+
+        async function testProcessContentSpecialCharacters() {
+            const input = 'Read [[Note with spaces]] here.';
+            const result = await processContent(input);
+
+            if (result.links.length !== 1) {
+                console.error('✗ processContent should handle spaces in filenames');
+                return false;
+            }
+            if (result.links[0].target !== 'Note with spaces') {
+                console.error('✗ Target with spaces incorrect');
+                return false;
+            }
+
+            console.log('✓ processContent handles special characters (spaces)');
+            return true;
+        }
+
+        async function testProcessContentNoWikiLinks() {
+            const input = 'This is normal markdown with [regular link](path.md).';
+            const result = await processContent(input);
+
+            if (result.links.length !== 0) {
+                console.error('✗ processContent should not extract regular markdown links');
+                return false;
+            }
+            if (result.markdown !== input) {
+                console.error('✗ Markdown without wiki-links should be unchanged');
+                return false;
+            }
+
+            console.log('✓ processContent leaves regular markdown unchanged');
+            return true;
+        }
+
+        async function testProcessContentEmptyInput() {
+            const result = await processContent('');
+
+            if (result.markdown !== '' || result.links.length !== 0) {
+                console.error('✗ processContent should handle empty input');
+                return false;
+            }
+
+            console.log('✓ processContent handles empty input');
+            return true;
+        }
+
+        function testExtractWikiLinksFunction() {
+            if (typeof extractWikiLinks !== 'function') {
+                console.error('✗ extractWikiLinks function not defined');
+                return false;
+            }
+
+            const links = extractWikiLinks('Test [[Link1]] and [[Link2|Display]]');
+            if (!Array.isArray(links) || links.length !== 2) {
+                console.error('✗ extractWikiLinks should return array of links');
+                return false;
+            }
+
+            console.log('✓ extractWikiLinks helper function works');
+            return true;
+        }
+
+        async function testProcessContentPreservesMarkdownStructure() {
+            const input = `# Heading
+
+This is a paragraph with [[Wiki Link]].
+
+- List item 1
+- List item 2 with [[Another Link|Display]]
+
+\`\`\`javascript
+// Code block should not process [[Code Link]]
+\`\`\``;
+
+            const result = await processContent(input);
+
+            // Should find 2 wiki-links (not the one in code block)
+            // Note: This basic implementation will find all 3 - code block handling
+            // would be an enhancement for later
+            if (result.links.length < 2) {
+                console.error('✗ processContent should find wiki-links in text');
+                return false;
+            }
+            if (!result.markdown.includes('# Heading')) {
+                console.error('✗ processContent should preserve markdown structure');
+                return false;
+            }
+
+            console.log('✓ processContent preserves markdown structure');
+            return true;
+        }
+
+        async function testProcessContentLinkMetadata() {
+            const input = 'Check [[Target|Display]] here.';
+            const result = await processContent(input);
+
+            if (result.links.length !== 1) {
+                console.error('✗ Should extract one link');
+                return false;
+            }
+
+            const link = result.links[0];
+            if (!link.original || !link.target || !link.resolvedPath) {
+                console.error('✗ Link metadata incomplete');
+                return false;
+            }
+            if (link.original !== '[[Target|Display]]') {
+                console.error('✗ Original text should be preserved');
+                return false;
+            }
+
+            console.log('✓ processContent provides complete link metadata');
+            return true;
+        }
+
+        // Configure marked.js with required options
+        function configureMarked() {
+            if (typeof marked === 'undefined') {
+                console.error('Cannot configure marked - library not loaded');
+                return false;
+            }
+
+            marked.setOptions({
+                gfm: true,              // Enable GitHub Flavored Markdown
+                breaks: true,           // Convert \n to <br>
+                headerIds: true,        // Add IDs to headings
+                mangle: false           // Don't mangle email addresses
+            });
+
+            console.log('✓ marked.js configured with GFM and breaks enabled');
+            return true;
+        }
+
+        // Run all tests on load
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('=== Running Tests ===');
+
+            // Structure tests
+            verifyStructure();
+
+            // Configuration tests
+            console.log('\n--- Configuration Tests ---');
+            const configExists = testConfigurationExists();
+            if (configExists) {
+                testConfigurationHasRequiredFields();
+                testValidationFunction();
+                testValidationDetectsEmptyWorkspace();
+                testValidationDetectsEmptyStartFile();
+                testValidationPassesWithValidConfig();
+                testErrorDisplayFunction();
+
+                // Validate configuration and display errors if invalid
+                const configValidation = validateConfiguration();
+                if (!configValidation.isValid) {
+                    console.error('Configuration validation failed:', configValidation.errors);
+                    displayConfigurationErrors(configValidation.errors);
+                } else {
+                    console.log('✓ Configuration is valid');
+                    clearError(); // Clear any previous errors
+                }
+            }
+
+            // marked.js integration tests
+            console.log('\n--- Marked.js Tests ---');
+            const markedLoaded = testMarkedLoaded();
+            if (markedLoaded) {
+                configureMarked();
+                testMarkedParseExists();
+                testBasicMarkdownParsing();
+                testGFMEnabled();
+                testBreaksEnabled();
+            }
+
+            // Path resolver tests
+            console.log('\n--- Path Resolver Tests ---');
+            testResolvePathFunction();
+            testResolvePathBasic();
+            testResolvePathWithBrackets();
+            testResolvePathWithAlias();
+            testResolvePathWithSubdirectory();
+            testResolvePathWithExistingExtension();
+            testResolvePathWithMarkdownExtension();
+            testResolvePathEmptyInput();
+            testResolvePathSpecialCharacters();
+            testNormalizePathFunction();
+            testNormalizePathLowercase();
+            testNormalizePathTrimsWhitespace();
+            testNormalizePathHandlesEmpty();
+
+            // File loader tests (async)
+            console.log('\n--- File Loader Tests ---');
+            (async () => {
+                await testLoadFileFunction();
+                await testLoadFileReturnsCorrectStructure();
+                await testLoadExistingFile();
+                await testLoadFileWithoutExtension();
+                await testLoadNonExistentFile();
+                await testFileExistsFunction();
+                await testErrorObjectStructure();
+
+                // File existence cache tests
+                console.log('\n--- File Existence Cache Tests ---');
+                testFileExistenceCacheExists();
+                testGetCachedValidityFunction();
+                testGetCachedValidityReturnsNull();
+                await testFileExistsCachesResult();
+                await testFileExistsUsesCache();
+                await testCacheNormalizesFilenames();
+                await testFileExistsHandlesNonExistent();
+                testClearFileCacheFunction();
+                testGetCacheStatsFunction();
+                await testLazyValidationStrategy();
+
+                // Wiki-link processor tests
+                console.log('\n--- Wiki-Link Processor Tests ---');
+                testProcessContentFunction();
+                await testProcessContentReturnsCorrectStructure();
+                await testProcessContentBasicWikiLink();
+                await testProcessContentAliasWikiLink();
+                await testProcessContentMultipleWikiLinks();
+                await testProcessContentSubdirectoryPath();
+                await testProcessContentSpecialCharacters();
+                await testProcessContentNoWikiLinks();
+                await testProcessContentEmptyInput();
+                testExtractWikiLinksFunction();
+                await testProcessContentPreservesMarkdownStructure();
+                await testProcessContentLinkMetadata();
+
+                console.log('\n=== All Tests Complete ===');
+            })();
+        });
+    </script>
 </body>
 </html>

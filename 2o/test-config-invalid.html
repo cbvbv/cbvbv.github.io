@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Config Validation Test - Invalid</title>
+</head>
+<body>
+    <h1>Configuration Validation Test (Invalid Config)</h1>
+    <div id="results"></div>
+
+    <script>
+        // TEST: Invalid configuration (empty workspaceDir)
+        const CONFIG = {
+            workspaceDir: '',     // Invalid: empty
+            startFile: 'index.md'
+        };
+
+        function validateConfiguration() {
+            const errors = [];
+            if (!CONFIG.workspaceDir || typeof CONFIG.workspaceDir !== 'string') {
+                errors.push('workspaceDir must be a non-empty string');
+            } else if (CONFIG.workspaceDir.trim() === '') {
+                errors.push('workspaceDir cannot be empty or whitespace');
+            }
+            if (!CONFIG.startFile || typeof CONFIG.startFile !== 'string') {
+                errors.push('startFile must be a non-empty string');
+            } else if (CONFIG.startFile.trim() === '') {
+                errors.push('startFile cannot be empty or whitespace');
+            }
+            return { isValid: errors.length === 0, errors };
+        }
+
+        const result = validateConfiguration();
+        const resultsDiv = document.getElementById('results');
+
+        if (!result.isValid && result.errors.length > 0) {
+            resultsDiv.innerHTML = `
+                <p style="color:green;font-weight:bold;">✓ Test PASSED</p>
+                <p>Validation correctly detected errors:</p>
+                <ul>${result.errors.map(e => `<li style="color:red;">${e}</li>`).join('')}</ul>
+            `;
+            console.log('✓ Validation correctly rejected invalid config');
+        } else {
+            resultsDiv.innerHTML = '<p style="color:red;font-weight:bold;">✗ Test FAILED: Should have detected errors</p>';
+            console.error('✗ Validation should have rejected invalid config');
+        }
+    </script>
+</body>
+</html>
